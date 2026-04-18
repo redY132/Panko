@@ -4,14 +4,16 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
   type DocumentData,
   type Firestore,
 } from 'firebase/firestore';
 
 import { auth, db } from '@/lib/firebase';
-import type { Patient, Schedule, ScheduleUpdate } from '@/types';
+import type { Patient, Room, Schedule, ScheduleUpdate } from '@/types';
 
 function requireUid(): string {
   const uid = auth.currentUser?.uid;
@@ -106,4 +108,24 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
   const userId = requireUid();
   const ref = doc(db, 'users', userId, 'schedules', scheduleId);
   await deleteDoc(ref);
+}
+
+export async function deletePatient(patientId: string): Promise<void> {
+  const userId = requireUid();
+  const q = query(schedulesCollection(db, userId), where('patientId', '==', patientId));
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'users', userId, 'patients', patientId));
+}
+
+export async function getRooms(): Promise<Room[]> {
+  const snap = await getDocs(collection(db, 'rooms'));
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      name: String(data.displayName ?? data.name ?? ''),
+      polygonCoordinates: Array.isArray(data.polygon) ? data.polygon : [],
+    };
+  });
 }

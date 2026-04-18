@@ -1,11 +1,7 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import {
-  getAuth,
-  initializeAuth,
-  getReactNativePersistence,
-  type Auth,
-} from 'firebase/auth';
+import { getAuth, initializeAuth, type Auth, type Persistence } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -34,6 +30,7 @@ function assertConfig(): void {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 function getFirebaseApp(): FirebaseApp {
   if (getApps().length > 0) {
@@ -52,6 +49,11 @@ function getOrCreateAuth(firebaseApp: FirebaseApp): Auth {
     return getAuth(firebaseApp);
   }
   try {
+    // Firebase 11 types omit getReactNativePersistence; it exists in the RN bundle at runtime
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { getReactNativePersistence } = require('firebase/auth') as {
+      getReactNativePersistence: (s: typeof ReactNativeAsyncStorage) => Persistence;
+    };
     return initializeAuth(firebaseApp, {
       persistence: getReactNativePersistence(ReactNativeAsyncStorage),
     });
@@ -63,5 +65,6 @@ function getOrCreateAuth(firebaseApp: FirebaseApp): Auth {
 app = getFirebaseApp();
 auth = getOrCreateAuth(app);
 db = getFirestore(app);
+storage = getStorage(app);
 
-export { app, auth, db };
+export { app, auth, db, storage };
