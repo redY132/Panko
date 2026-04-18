@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -13,7 +16,8 @@ import AddPatientModal from '@/components/home/AddPatientModal';
 import PatientList from '@/components/home/PatientList';
 import WeeklySchedule from '@/components/home/WeeklySchedule';
 import { useAuth } from '@/contexts/AuthProvider';
-import { getPatients, getRooms, getSchedules } from '@/lib/firestore';
+// import { useFaceEnrollment } from '@/hooks/useFaceEnrollment'; // TODO: re-enable when Mini PC WebSocket is ready
+import { addRoom, getPatients, getRooms, getSchedules } from '@/lib/firestore';
 import type { Patient, Room, Schedule } from '@/types';
 
 export default function HomeScreen() {
@@ -25,6 +29,9 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [removeMode, setRemoveMode] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
+  const [addRoomVisible, setAddRoomVisible] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [savingRoom, setSavingRoom] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -49,6 +56,58 @@ export default function HomeScreen() {
     void loadData();
   }, [loadData]);
 
+  // TODO: re-enable when Mini PC WebSocket is ready
+  // useFaceEnrollment({
+  //   onEmbeddingReceived: useCallback((patientId, embedding, model) => {
+  //     setPatients((prev) =>
+  //       prev.map((p) =>
+  //         p.id === patientId
+  //           ? { ...p, faceEmbedding: embedding, ...(model ? { faceEmbeddingModel: model } : {}) }
+  //           : p,
+  //       ),
+  //     );
+  //   }, []),
+  // });
+
+  function handleAddRoomPress() {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Add Room',
+        'Enter a room name',
+        async (name) => {
+          if (!name?.trim()) return;
+          try {
+            const room = await addRoom(name);
+            setRooms((r) => [...r, room]);
+          } catch (e) {
+            console.error('Home: failed to add room (iOS prompt)', e);
+            Alert.alert('Error', 'Failed to add room.');
+          }
+        },
+        'plain-text',
+      );
+    } else {
+      setRoomName('');
+      setAddRoomVisible(true);
+    }
+  }
+
+  async function handleSaveRoom() {
+    if (!roomName.trim()) { Alert.alert('Name required'); return; }
+    setSavingRoom(true);
+    try {
+      const room = await addRoom(roomName);
+      setRooms((r) => [...r, room]);
+      setAddRoomVisible(false);
+      setRoomName('');
+    } catch (e) {
+      console.error('Home: failed to add room', e);
+      Alert.alert('Error', 'Failed to add room.');
+    } finally {
+      setSavingRoom(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -61,7 +120,10 @@ export default function HomeScreen() {
         />
         <View style={styles.headerBtns}>
           <Pressable style={styles.btn} onPress={() => setAddVisible(true)}>
-            <Text style={styles.btnText}>+ Add Patient</Text>
+            <Text style={styles.btnText}>+ Patient</Text>
+          </Pressable>
+          <Pressable style={styles.btn} onPress={handleAddRoomPress}>
+            <Text style={styles.btnText}>+ Room</Text>
           </Pressable>
           <Pressable
             style={[styles.btn, removeMode && styles.btnDanger]}
@@ -108,6 +170,39 @@ export default function HomeScreen() {
           setAddVisible(false);
         }}
       />
+
+      {/* Android Add Room modal (iOS uses Alert.prompt) */}
+      <Modal visible={addRoomVisible} transparent animationType="fade" onRequestClose={() => setAddRoomVisible(false)}>
+        <Pressable style={styles.roomOverlay} onPress={() => setAddRoomVisible(false)}>
+          <Pressable style={styles.roomCard} onPress={() => {}}>
+            <Text style={styles.roomCardTitle}>Add Room</Text>
+            <TextInput
+              style={styles.roomInput}
+              value={roomName}
+              onChangeText={setRoomName}
+              placeholder="Room name"
+              autoFocus
+              autoCapitalize="words"
+            />
+            <View style={styles.roomActions}>
+              <Pressable style={styles.roomCancelBtn} onPress={() => setAddRoomVisible(false)}>
+                <Text style={styles.roomCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.roomSaveBtn, savingRoom && styles.roomSaveBtnDisabled]}
+                onPress={() => void handleSaveRoom()}
+                disabled={savingRoom}
+              >
+                {savingRoom ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.roomSaveText}>Add</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -135,8 +230,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  btnText: { fontWeight: '600', fontSize: 14, color: '#374151' },
+  btnText: { fontWeight: '600', fontSize: 13, color: '#374151' },
   btnDanger: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
   btnDangerText: { color: '#DC2626' },
   loader: { flex: 1 },
+  roomOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roomCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    gap: 12,
+  },
+  roomCardTitle: { fontSize: 17, fontWeight: '700' },
+  roomInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+  },
+  roomActions: { flexDirection: 'row', gap: 10 },
+  roomCancelBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  roomCancelText: { fontWeight: '600', color: '#374151' },
+  roomSaveBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#111',
+  },
+  roomSaveBtnDisabled: { opacity: 0.5 },
+  roomSaveText: { fontWeight: '600', color: '#fff' },
 });

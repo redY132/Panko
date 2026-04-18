@@ -1,5 +1,6 @@
 import {
   RobotState,
+  type FaceEnrolledMessage,
   type RobotCommand,
   type RobotTelemetry,
   type WebSocketConnectionState,
@@ -61,6 +62,7 @@ export class RobotWebSocketManager {
   private connectionState: WebSocketConnectionState = 'disconnected';
   private stateListeners = new Set<(s: WebSocketConnectionState) => void>();
   private telemetryListeners = new Set<TelemetryListener>();
+  private faceEnrollmentListeners = new Set<(msg: FaceEnrolledMessage) => void>();
 
   getConnectionState(): WebSocketConnectionState {
     return this.connectionState;
@@ -121,6 +123,13 @@ export class RobotWebSocketManager {
     };
   }
 
+  subscribeToFaceEnrollment(callback: (msg: FaceEnrolledMessage) => void): () => void {
+    this.faceEnrollmentListeners.add(callback);
+    return () => {
+      this.faceEnrollmentListeners.delete(callback);
+    };
+  }
+
   private clearReconnectTimer(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -163,6 +172,23 @@ export class RobotWebSocketManager {
       ws.onmessage = (event) => {
         try {
           const parsed: unknown = JSON.parse(String(event.data));
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            (parsed as { type?: string }).type === 'FACE_ENROLLED'
+          ) {
+            const msg = parsed as FaceEnrolledMessage;
+            if (Array.isArray(msg.embedding) && msg.patientId) {
+              this.faceEnrollmentListeners.forEach((l) => {
+                try {
+                  l(msg);
+                } catch {
+                  /* ignore */
+                }
+              });
+            }
+            return;
+          }
           if (
             parsed &&
             typeof parsed === 'object' &&

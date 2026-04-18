@@ -1,11 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,8 +15,8 @@ import {
   View,
 } from 'react-native';
 
-import { storage } from '@/lib/firebase';
 import { addPatient } from '@/lib/firestore';
+// import { robotWebSocket } from '@/lib/websocket'; // TODO: re-enable when Mini PC WebSocket is ready
 import type { Patient, Room } from '@/types';
 
 type Props = {
@@ -28,13 +29,13 @@ type Props = {
 export default function AddPatientModal({ visible, rooms, onClose, onPatientAdded }: Props) {
   const [name, setName] = useState('');
   const [roomId, setRoomId] = useState<string | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<{ uri: string; base64: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   function reset() {
     setName('');
     setRoomId(null);
-    setPhotoUri(null);
+    setPhoto(null);
   }
 
   function handleClose() {
@@ -43,49 +44,66 @@ export default function AddPatientModal({ visible, rooms, onClose, onPatientAdde
   }
 
   async function pickPhoto(source: 'camera' | 'library') {
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({
-            mediaTypes: 'images',
-            quality: 0.8,
-            allowsEditing: true,
-            aspect: [1, 1],
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: 'images',
-            quality: 0.8,
-            allowsEditing: true,
-            aspect: [1, 1],
-          });
-
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+    if (source === 'camera') {
+      const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+      if (!granted) {
+        Alert.alert('Camera access denied', 'Enable camera access in Settings to take a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setPhoto({ uri: result.assets[0].uri, base64: result.assets[0].base64 ?? '' });
+      }
+    } else {
+      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!granted) {
+        Alert.alert('Photo library access denied', 'Enable photo library access in Settings.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setPhoto({ uri: result.assets[0].uri, base64: result.assets[0].base64 ?? '' });
+      }
     }
   }
 
   async function handleSubmit() {
     if (!name.trim()) { Alert.alert('Name required'); return; }
-    if (!roomId) { Alert.alert('Room required'); return; }
-    if (!photoUri) { Alert.alert('Face photo required'); return; }
+    if (!photo) { Alert.alert('Face photo required'); return; }
 
     setSaving(true);
     try {
-      const resp = await fetch(photoUri);
-      const blob = await resp.blob();
-      const storageRef = ref(storage, `faces/${Date.now()}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const faceId = await getDownloadURL(storageRef);
-
       const patient = await addPatient({
         name: name.trim(),
-        roomId,
-        faceId,
+        roomId: roomId ?? '',
+        faceEmbedding: [], // populated async when Mini PC responds via FACE_ENROLLED
         medicines: [],
       });
+
+      // TODO: re-enable when Mini PC WebSocket is ready
+      // robotWebSocket.sendCommand({
+      //   type: 'ENROLL_FACE',
+      //   patientId: patient.id,
+      //   imageBase64: photo.base64,
+      // });
+
       onPatientAdded(patient);
       handleClose();
-    } catch {
-      Alert.alert('Error', 'Failed to add patient. Try again.');
+    } catch (e) {
+      console.error('AddPatientModal: failed to save patient', e);
+      Alert.alert('Error', 'Failed to save patient. Try again.');
     } finally {
       setSaving(false);
     }
@@ -93,73 +111,80 @@ export default function AddPatientModal({ visible, rooms, onClose, onPatientAdde
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Add Patient</Text>
-          <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Patient name"
-              autoCapitalize="words"
-            />
+      <KeyboardAvoidingView
+        style={styles.kavWrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+      >
+        <Pressable style={styles.overlay} onPress={handleClose}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>Add Patient</Text>
+            <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Patient name"
+                autoCapitalize="words"
+              />
 
-            <Text style={styles.label}>Room</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
-            >
-              {rooms.length === 0 ? (
-                <Text style={styles.noRooms}>No rooms yet — complete setup first.</Text>
-              ) : (
-                rooms.map((r) => (
-                  <Pressable
-                    key={r.id}
-                    style={[styles.chip, roomId === r.id && styles.chipSelected]}
-                    onPress={() => setRoomId(r.id)}
-                  >
-                    <Text style={[styles.chipText, roomId === r.id && styles.chipTextSelected]}>
-                      {r.name}
-                    </Text>
-                  </Pressable>
-                ))
-              )}
+              <Text style={styles.label}>Room</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+              >
+                {rooms.length === 0 ? (
+                  <Text style={styles.noRooms}>No rooms yet — tap "+ Room" to add one.</Text>
+                ) : (
+                  rooms.map((r) => (
+                    <Pressable
+                      key={r.id}
+                      style={[styles.chip, roomId === r.id && styles.chipSelected]}
+                      onPress={() => setRoomId(r.id)}
+                    >
+                      <Text style={[styles.chipText, roomId === r.id && styles.chipTextSelected]}>
+                        {r.name}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+
+              <Text style={styles.label}>Face Photo</Text>
+              <View style={styles.photoRow}>
+                <Pressable style={styles.photoBtn} onPress={() => void pickPhoto('camera')}>
+                  <Text style={styles.photoBtnText}>Camera</Text>
+                </Pressable>
+                <Pressable style={styles.photoBtn} onPress={() => void pickPhoto('library')}>
+                  <Text style={styles.photoBtnText}>Library</Text>
+                </Pressable>
+              </View>
+              {photo && <Image source={{ uri: photo.uri }} style={styles.preview} />}
+
+              <Pressable
+                style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
+                onPress={() => void handleSubmit()}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Add Patient</Text>
+                )}
+              </Pressable>
             </ScrollView>
-
-            <Text style={styles.label}>Face Photo</Text>
-            <View style={styles.photoRow}>
-              <Pressable style={styles.photoBtn} onPress={() => void pickPhoto('camera')}>
-                <Text style={styles.photoBtnText}>Camera</Text>
-              </Pressable>
-              <Pressable style={styles.photoBtn} onPress={() => void pickPhoto('library')}>
-                <Text style={styles.photoBtnText}>Library</Text>
-              </Pressable>
-            </View>
-            {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
-
-            <Pressable
-              style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
-              onPress={() => void handleSubmit()}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitBtnText}>Add Patient</Text>
-              )}
-            </Pressable>
-          </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  kavWrapper: { flex: 1, justifyContent: 'flex-end' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#fff',

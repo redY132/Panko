@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { deletePatient } from '@/lib/firestore';
 import type { Patient, Room } from '@/types';
@@ -106,10 +106,10 @@ export default function PatientList({
                 )}
 
                 <Text style={styles.detailLabel}>FACE ENROLLMENT</Text>
-                {patient.faceId ? (
-                  <Image source={{ uri: patient.faceId }} style={styles.faceThumbnail} />
+                {patient.faceEmbedding.length > 0 ? (
+                  <Text style={styles.enrolled}>Enrolled ({patient.faceEmbedding.length}d vector)</Text>
                 ) : (
-                  <Text style={styles.unenrolled}>Not enrolled</Text>
+                  <Text style={styles.pending}>Enrollment pending</Text>
                 )}
               </View>
             )}
@@ -162,6 +162,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   detailValue: { fontSize: 14, color: '#374151' },
-  faceThumbnail: { width: 64, height: 64, borderRadius: 8, marginTop: 4 },
+  enrolled: { fontSize: 13, color: '#16A34A', fontWeight: '600' },
+  pending: { fontSize: 13, color: '#D97706', fontWeight: '500' },
   unenrolled: { fontSize: 13, color: '#9CA3AF' },
 });

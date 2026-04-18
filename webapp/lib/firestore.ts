@@ -36,7 +36,12 @@ function mapPatientDoc(id: string, data: DocumentData): Patient {
     id,
     name: String(data.name ?? ''),
     roomId: String(data.roomId ?? ''),
-    faceId: String(data.faceId ?? ''),
+    faceEmbedding: Array.isArray(data.faceEmbedding)
+      ? (data.faceEmbedding as number[])
+      : [],
+    faceEmbeddingModel: typeof data.faceEmbeddingModel === 'string'
+      ? data.faceEmbeddingModel
+      : undefined,
     medicines: Array.isArray(data.medicines)
       ? data.medicines.map((m) => String(m))
       : [],
@@ -128,4 +133,31 @@ export async function getRooms(): Promise<Room[]> {
       polygonCoordinates: Array.isArray(data.polygon) ? data.polygon : [],
     };
   });
+}
+
+export async function updatePatientEmbedding(
+  patientId: string,
+  embedding: number[],
+  model?: string,
+): Promise<void> {
+  const userId = requireUid();
+  const ref = doc(db, 'users', userId, 'patients', patientId);
+  await updateDoc(ref, {
+    faceEmbedding: embedding,
+    ...(model ? { faceEmbeddingModel: model } : {}),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function addRoom(name: string): Promise<Room> {
+  const trimmed = name.trim();
+  const ref = await addDoc(collection(db, 'rooms'), {
+    name: trimmed,
+    displayName: trimmed,
+    polygon: [],
+    patientIds: [],
+    floor: 0,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, name: trimmed, polygonCoordinates: [] };
 }

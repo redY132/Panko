@@ -2,7 +2,8 @@ export type Patient = {
   id: string;
   name: string;
   roomId: string;
-  faceId: string;
+  faceEmbedding: number[];
+  faceEmbeddingModel?: string;
   medicines: string[];
 };
 
@@ -99,13 +100,27 @@ export type AbortReturnCommand = { type: 'ABORT_RETURN' };
 
 export type StartMappingCommand = { type: 'START_MAPPING' };
 
+export type EnrollFaceCommand = {
+  type: 'ENROLL_FACE';
+  patientId: string;
+  imageBase64: string; // base64-encoded JPEG, no data: prefix
+};
+
+export type FaceEnrolledMessage = {
+  type: 'FACE_ENROLLED';
+  patientId: string;
+  embedding: number[];
+  model?: string;
+};
+
 export type RobotCommand =
   | DispatchCommand
   | ManualDriveCommand
   | EmergencyStopCommand
   | ExtendStandbyCommand
   | AbortReturnCommand
-  | StartMappingCommand;
+  | StartMappingCommand
+  | EnrollFaceCommand;
 
 export type WebSocketConnectionState =
   | 'disconnected'
