@@ -6,7 +6,9 @@ import {
   type WebSocketConnectionState,
 } from '@/types';
 
-const DEFAULT_WS_URL = process.env.EXPO_PUBLIC_ROBOT_WS_URL ?? 'ws://10.10.8.67:8765';
+/** Mini PC WebSocket. Prefer EXPO_PUBLIC_ROBOT_WS_URL; iPhone hotspot DHCP may assign a new IPv4 after reconnect — check `hostname -I` / `ip -4 addr` on the PC. */
+const DEFAULT_WS_URL =
+  process.env.EXPO_PUBLIC_ROBOT_WS_URL ?? 'ws://172.20.10.7:8765';
 const INITIAL_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 

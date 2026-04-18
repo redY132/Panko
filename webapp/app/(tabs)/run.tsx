@@ -16,7 +16,7 @@ export default function RunScreen() {
 
   useEffect(() => {
     try {
-      robotWebSocket.connect('ws://10.10.8.67:8765');
+      robotWebSocket.connect();
     } catch (e) {
       console.error('[WS] connect failed:', e);
     }
