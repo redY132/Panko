@@ -8,15 +8,15 @@ A wheeled robot that navigates a home or hospital floor plan via LiDAR SLAM, ide
 
 ## Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React Native (Web + iOS + Android via Expo) |
-| Distribution | Expo Go / standalone build — installed directly on devices, no web server |
-| Database | Firebase Firestore |
-| Auth | Firebase Auth (Google OAuth + Email/Password) |
-| Device Communication | WiFi — WebSockets (real-time) + REST (commands) |
-| Robot OS | ROS 2 |
-| ML Training | HuggingFace pretrained models + fine-tuning |
+| Layer                | Technology                                                                |
+| -------------------- | ------------------------------------------------------------------------- |
+| Frontend             | React Native (Web + iOS + Android via Expo)                               |
+| Distribution         | Expo Go / standalone build — installed directly on devices, no web server |
+| Database             | Firebase Firestore                                                        |
+| Auth                 | Firebase Auth (Google OAuth + Email/Password)                             |
+| Device Communication | WiFi — WebSockets (real-time) + REST (commands)                           |
+| Robot OS             | ROS 2                                                                     |
+| ML Training          | HuggingFace pretrained models + fine-tuning                               |
 
 ---
 
@@ -26,6 +26,7 @@ A wheeled robot that navigates a home or hospital floor plan via LiDAR SLAM, ide
 
 **ESP32**
 Responsible exclusively for real-time hardware control:
+
 - Wheel drive and motor control
 - Medicine compartment open/close
 - Turret/body rotation
@@ -33,12 +34,14 @@ Responsible exclusively for real-time hardware control:
 
 **Rubik Pi 3**
 Responsible for camera data capture and lightweight preprocessing:
+
 - Streams camera feed to the Mini PC over WiFi (compressed, not raw)
 - Optionally runs lightweight on-device preprocessing using its onboard 12 TOPS NPU to reduce bandwidth (e.g. detecting whether a face is present before sending frames)
 - Connected to the rover physically
 
-**Mini PC** *(lives physically adjacent to the robot arm, mounted on the rover platform)*
+**Mini PC** _(lives physically adjacent to the robot arm, mounted on the rover platform)_
 The central brain of the entire operation:
+
 - Receives camera stream from Rubik Pi over local WiFi
 - Runs all three inference models (navigation, face recognition, arm control)
 - Sends motor commands to the ESP over WiFi
@@ -47,11 +50,13 @@ The central brain of the entire operation:
 - Hosts a local WebSocket server that the React Native app connects to
 
 **Robot Arm**
+
 - Physically co-located with the Mini PC on the rover
 - Controlled directly by the Mini PC via USB/serial
 - Responsible for picking pill bottles from the 2×4 shelf and placing them in the rover compartment
 
 **2×4 Pill Bottle Shelf**
+
 - Fixed shelf with 8 labeled cells
 - Each cell is assigned to a patient and medicine
 - The arm model uses cell position as a known reference for pickup
@@ -69,7 +74,7 @@ React Native App (installed on phone / tablet / laptop)
   WiFi          USB/Serial
   (WebSocket)     |
      |           Robot Arm
-  Rubik Pi     
+  Rubik Pi
   (camera stream)
      |
     ESP32
@@ -80,28 +85,31 @@ React Native App (installed on phone / tablet / laptop)
 
 ---
 
-## Inference Models *(Mini PC)*
+## Inference Models _(Mini PC)_
 
 All three models are fine-tuned from HuggingFace pretrained checkpoints using ROS 2-compatible tooling.
 
 ### 1. Navigation Model
+
 - Input: LiDAR occupancy grid + robot position (Robot Position)
 - Task: Obstacle avoidance and pathfinding to a target room
 - Output: Velocity and steering commands sent to ESP32
 
 ### 2. Face Recognition Model
+
 - Input: Camera frames from Rubik Pi
 - Task: Match detected face against enrolled patient face embeddings
 - Output: Patient match result (matched ID or no match)
 
 ### 3. Arm Control Model
+
 - Input: Camera view of shelf + target cell position
 - Task: Pick pill bottle from assigned shelf cell and place in rover compartment
 - Output: Arm joint commands
 
 ---
 
-## Training Phase *(one-time)*
+## Training Phase _(one-time)_
 
 Runs once before deployment. Not part of the app flow.
 
@@ -137,12 +145,14 @@ ERROR
 Displays a global overview of patients and their medication schedules.
 
 **Top — Weekly Schedule**
+
 - Google Tasks-style weekly view (Sunday–Saturday)
 - Shows scheduled medication deliveries for all patients across all rooms
 - Tap an event to view details, modify time/medicine, or delete
 - Color-coded per patient
 
 **Bottom — Patient Database**
+
 - Header row contains a search bar and two buttons side by side: **Add Patient** and **Remove Patient**
 - Searchable list of all enrolled patients
 - In Remove mode, patients get a delete icon; tapping prompts a confirmation dialog before deletion. Deleting a patient also removes their associated schedules and face data.
@@ -152,8 +162,9 @@ Displays a global overview of patients and their medication schedules.
   - Face enrollment photo thumbnail
   - Delivery history log
 
-**Add Patient Flow** *(modal or sheet, triggered from Home)*
+**Add Patient Flow** _(modal or sheet, triggered from Home)_
 Three required fields — no optional steps:
+
 1. **Name** — text input
 2. **Room** — dropdown of existing rooms from the map
 3. **Face Photo** — camera capture or photo library upload; basic quality validation (face detected, sufficient lighting) before accepting
@@ -167,6 +178,7 @@ On confirm, the patient record is saved to Firestore and the face photo is uploa
 The main operational screen. Contains the building map and robot control interface.
 
 **Map Panel**
+
 - Initially empty — populated after LIDAR SLAM completes during setup
 - Displays the occupancy grid as a simplified polygon map (rooms as closed polygons with straight edges)
 - Live robot position overlay using Robot Position from ROS 2
@@ -177,6 +189,7 @@ The main operational screen. Contains the building map and robot control interfa
 - Color-coded room states (e.g. robot present, delivery pending)
 
 **Telemetry Panel**
+
 - Live WebSocket feed from Mini PC:
   - Current Robot State
   - Robot Position (x, y, heading)
@@ -184,11 +197,13 @@ The main operational screen. Contains the building map and robot control interfa
   - Active SLAM observations (displayed as overlaid dots on map)
 
 **Command Panel**
+
 - Send Now: Select patient → confirm medicine → dispatch immediately
 - Schedule: Select patient → medicine → date/time → save to Firestore
 - Emergency Stop: Immediately halts all motors
 
 **Act Phase (overlaid on Run tab when robot is ARRIVED or later)**
+
 - Face verification status shown in real time
 - If no face detected: countdown timer shown (default 5 min, configurable)
 - Options: Extend wait / Abort and return
@@ -196,32 +211,37 @@ The main operational screen. Contains the building map and robot control interfa
 
 ---
 
-### 3. Setup *(Onboarding Wizard — one-time per installation)*
+### 3. Setup _(Onboarding Wizard — one-time per installation)_
 
 Multi-step flow triggered on first launch or from Settings.
 
 **Step 1 — Device Discovery**
+
 - App scans local WiFi network for Mini PC, Rubik Pi, and ESP32
 - Displays discovered devices with IP and status
 - User confirms connections
 
 **Step 2 — LIDAR SLAM**
+
 - User initiates mapping run from the app
 - Robot enters MAPPING state
 - Progress shown on a live raw map feed
 - Robot State transitions to MAP_READY when complete
 
 **Step 3 — Map Simplification**
+
 - Raw occupancy grid is processed into simplified closed polygons
 - Displayed to user for review
 - User can adjust polygon boundaries if needed
 
 **Step 4 — Room Naming**
+
 - Each detected polygon is shown
 - User can rename rooms or leave as default (Room 1, Room 2, etc.)
 - Room data is saved to Firestore
 
 **Step 5 — Shelf Configuration**
+
 - User assigns each of the 8 shelf cells to a patient + medicine
 - Saved to Firestore
 
@@ -242,6 +262,7 @@ Multi-step flow triggered on first launch or from Settings.
 ## Data Model (Firestore)
 
 ### `users/{userId}`
+
 ```
 {
   email: string,
@@ -251,6 +272,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `patients/{patientId}`
+
 ```
 {
   name: string,
@@ -264,6 +286,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `medicines/{medicineId}`
+
 ```
 {
   name: string,
@@ -274,6 +297,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `rooms/{roomId}`
+
 ```
 {
   displayName: string,
@@ -283,7 +307,8 @@ Multi-step flow triggered on first launch or from Settings.
 }
 ```
 
-### `shelf/{cellId}` *(cellId: "A1"–"B4")*
+### `shelf/{cellId}` _(cellId: "A1"–"B4")_
+
 ```
 {
   patientId: string | null,
@@ -293,6 +318,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `schedules/{scheduleId}`
+
 ```
 {
   patientId: string,
@@ -305,6 +331,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `deliveryLogs/{logId}`
+
 ```
 {
   scheduleId: string | null,
@@ -321,6 +348,7 @@ Multi-step flow triggered on first launch or from Settings.
 ```
 
 ### `map/{installationId}`
+
 ```
 {
   occupancyGridRef: string,   // Firebase Cloud Storage path to raw SLAM grid
@@ -338,9 +366,10 @@ All authenticated users have full access. Firebase Auth handles login (Google OA
 
 ---
 
-## WebSocket Event Schema *(Mini PC ↔ App)*
+## WebSocket Event Schema _(Mini PC ↔ App)_
 
 ### App → Mini PC (Commands)
+
 ```json
 { "type": "DISPATCH", "patientId": "...", "medicineId": "...", "roomId": "..." }
 { "type": "MANUAL_DRIVE", "linear": 0.5, "angular": -0.1 }
@@ -351,6 +380,7 @@ All authenticated users have full access. Firebase Auth handles login (Google OA
 ```
 
 ### Mini PC → App (Telemetry)
+
 ```json
 { "type": "STATE_UPDATE", "state": "NAVIGATING" }
 { "type": "POSITION_UPDATE", "x": 3.4, "y": 1.2, "heading": 1.57 }
@@ -364,13 +394,13 @@ All authenticated users have full access. Firebase Auth handles login (Google OA
 
 ## Error Handling
 
-| Error | Trigger | Behavior |
-|---|---|---|
-| Shelf cell empty | Arm detects no bottle in assigned cell | Robot stays IDLE, app notified, delivery blocked with alert |
-| No face detected | Timer expires in WAITING_FOR_FACE | Push notification sent, robot returns |
-| Navigation blocked | Obstacle cannot be routed around | Robot enters ERROR state, app alerted, manual control offered |
-| WiFi loss | WebSocket disconnects mid-delivery | Robot enters safe IDLE, resumes on reconnect |
-| Face mismatch | Detected face does not match patient | Robot does not open compartment, logs event, notifies app |
+| Error              | Trigger                                | Behavior                                                      |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------- |
+| Shelf cell empty   | Arm detects no bottle in assigned cell | Robot stays IDLE, app notified, delivery blocked with alert   |
+| No face detected   | Timer expires in WAITING_FOR_FACE      | Push notification sent, robot returns                         |
+| Navigation blocked | Obstacle cannot be routed around       | Robot enters ERROR state, app alerted, manual control offered |
+| WiFi loss          | WebSocket disconnects mid-delivery     | Robot enters safe IDLE, resumes on reconnect                  |
+| Face mismatch      | Detected face does not match patient   | Robot does not open compartment, logs event, notifies app     |
 
 ---
 
