@@ -7,20 +7,11 @@ import TelemetryPanel from '@/components/run/TelemetryPanel';
 import WsTestButton from '@/components/run/WsTestButton';
 import { useRobotState } from '@/hooks/useRobotState';
 import { getRooms } from '@/lib/firestore';
-import { robotWebSocket } from '@/lib/websocket';
 import type { Room } from '@/types';
 
 export default function RunScreen() {
   const { telemetry, connectionState } = useRobotState();
   const [rooms, setRooms] = useState<Room[]>([]);
-
-  useEffect(() => {
-    try {
-      robotWebSocket.connect();
-    } catch (e) {
-      console.error('[WS] connect failed:', e);
-    }
-  }, []);
 
   useEffect(() => {
     void getRooms().then(setRooms).catch(console.error);

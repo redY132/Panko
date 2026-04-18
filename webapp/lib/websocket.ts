@@ -4,18 +4,17 @@ import {
   type RobotCommand,
   type RobotTelemetry,
   type WebSocketConnectionState,
-} from '@/types';
+} from "@/types";
 
 /** Mini PC WebSocket. Prefer EXPO_PUBLIC_ROBOT_WS_URL; iPhone hotspot DHCP may assign a new IPv4 after reconnect — check `hostname -I` / `ip -4 addr` on the PC. */
-const DEFAULT_WS_URL =
-  process.env.EXPO_PUBLIC_ROBOT_WS_URL ?? 'ws://172.20.10.7:8765';
+const DEFAULT_WS_URL = process.env.EXPO_PUBLIC_ROBOT_WS_URL;
 const INITIAL_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 
 type TelemetryListener = (telemetry: RobotTelemetry) => void;
 
 function parseRobotState(value: unknown): RobotState {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return RobotState.IDLE;
   }
   const values = Object.values(RobotState) as string[];
@@ -26,12 +25,12 @@ function parseRobotState(value: unknown): RobotState {
 }
 
 function parseTelemetryPayload(raw: unknown): RobotTelemetry | null {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== "object") {
     return null;
   }
   const obj = raw as Record<string, unknown>;
   const pos = obj.position;
-  if (!pos || typeof pos !== 'object') {
+  if (!pos || typeof pos !== "object") {
     return null;
   }
   const p = pos as Record<string, unknown>;
@@ -47,24 +46,26 @@ function parseTelemetryPayload(raw: unknown): RobotTelemetry | null {
     battery: Number.isFinite(battery) ? battery : 0,
     currentState: parseRobotState(obj.currentState ?? obj.state),
     currentRoom:
-      typeof obj.currentRoom === 'string'
+      typeof obj.currentRoom === "string"
         ? obj.currentRoom
         : obj.currentRoom === null
-          ? null
-          : null,
+        ? null
+        : null,
   };
 }
 
 export class RobotWebSocketManager {
   private socket: WebSocket | null = null;
-  private url = '';
+  private url = "";
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manualClose = false;
-  private connectionState: WebSocketConnectionState = 'disconnected';
+  private connectionState: WebSocketConnectionState = "disconnected";
   private stateListeners = new Set<(s: WebSocketConnectionState) => void>();
   private telemetryListeners = new Set<TelemetryListener>();
-  private faceEnrollmentListeners = new Set<(msg: FaceEnrolledMessage) => void>();
+  private faceEnrollmentListeners = new Set<
+    (msg: FaceEnrolledMessage) => void
+  >();
   private rawMessageListeners = new Set<(raw: string) => void>();
 
   getConnectionState(): WebSocketConnectionState {
@@ -72,7 +73,7 @@ export class RobotWebSocketManager {
   }
 
   subscribeToConnectionState(
-    listener: (state: WebSocketConnectionState) => void,
+    listener: (state: WebSocketConnectionState) => void
   ): () => void {
     this.stateListeners.add(listener);
     listener(this.connectionState);
@@ -94,7 +95,9 @@ export class RobotWebSocketManager {
 
   connect(url: string = DEFAULT_WS_URL): void {
     if (!url) {
-      throw new Error('WebSocket URL missing. Set EXPO_PUBLIC_ROBOT_WS_URL or pass a URL.');
+      throw new Error(
+        "WebSocket URL missing. Set EXPO_PUBLIC_ROBOT_WS_URL or pass a URL."
+      );
     }
     if (
       this.socket &&
@@ -103,7 +106,7 @@ export class RobotWebSocketManager {
     ) {
       return;
     }
-    console.log('[WS] connecting to', url);
+    console.log("[WS] connecting to", url);
     this.manualClose = false;
     this.url = url;
     this.clearReconnectTimer();
@@ -114,15 +117,15 @@ export class RobotWebSocketManager {
     this.manualClose = true;
     this.clearReconnectTimer();
     if (this.socket) {
-      this.socket.close(1000, 'client disconnect');
+      this.socket.close(1000, "client disconnect");
       this.socket = null;
     }
-    this.setConnectionState('disconnected');
+    this.setConnectionState("disconnected");
   }
 
   sendCommand(command: RobotCommand): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      throw new Error('WebSocket is not connected');
+      throw new Error("WebSocket is not connected");
     }
     this.socket.send(JSON.stringify(command));
   }
@@ -134,7 +137,9 @@ export class RobotWebSocketManager {
     };
   }
 
-  subscribeToFaceEnrollment(callback: (msg: FaceEnrolledMessage) => void): () => void {
+  subscribeToFaceEnrollment(
+    callback: (msg: FaceEnrolledMessage) => void
+  ): () => void {
     this.faceEnrollmentListeners.add(callback);
     return () => {
       this.faceEnrollmentListeners.delete(callback);
@@ -161,11 +166,11 @@ export class RobotWebSocketManager {
     }
     const exp = Math.min(
       MAX_RECONNECT_DELAY_MS,
-      INITIAL_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts,
+      INITIAL_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts
     );
     const jitter = Math.floor(Math.random() * 500);
     const delay = exp + jitter;
-    this.setConnectionState('reconnecting');
+    this.setConnectionState("reconnecting");
     this.clearReconnectTimer();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts += 1;
@@ -177,24 +182,28 @@ export class RobotWebSocketManager {
     if (this.manualClose) {
       return;
     }
-    this.setConnectionState('connecting');
+    this.setConnectionState("connecting");
     try {
       const ws = new WebSocket(this.url);
       this.socket = ws;
 
       ws.onopen = () => {
         this.reconnectAttempts = 0;
-        this.setConnectionState('connected');
+        this.setConnectionState("connected");
       };
 
       ws.onmessage = (event) => {
-        this.rawMessageListeners.forEach((l) => { try { l(String(event.data)); } catch {} });
+        this.rawMessageListeners.forEach((l) => {
+          try {
+            l(String(event.data));
+          } catch {}
+        });
         try {
           const parsed: unknown = JSON.parse(String(event.data));
           if (
             parsed &&
-            typeof parsed === 'object' &&
-            (parsed as { type?: string }).type === 'FACE_ENROLLED'
+            typeof parsed === "object" &&
+            (parsed as { type?: string }).type === "FACE_ENROLLED"
           ) {
             const msg = parsed as FaceEnrolledMessage;
             if (Array.isArray(msg.embedding) && msg.patientId) {
@@ -210,11 +219,11 @@ export class RobotWebSocketManager {
           }
           if (
             parsed &&
-            typeof parsed === 'object' &&
-            (parsed as { type?: string }).type === 'TELEMETRY'
+            typeof parsed === "object" &&
+            (parsed as { type?: string }).type === "TELEMETRY"
           ) {
             const telemetry = parseTelemetryPayload(
-              (parsed as { payload?: unknown }).payload ?? parsed,
+              (parsed as { payload?: unknown }).payload ?? parsed
             );
             if (telemetry) {
               this.telemetryListeners.forEach((l) => {
@@ -251,11 +260,11 @@ export class RobotWebSocketManager {
         if (!this.manualClose) {
           this.scheduleReconnect();
         } else {
-          this.setConnectionState('disconnected');
+          this.setConnectionState("disconnected");
         }
       };
     } catch {
-      this.setConnectionState('disconnected');
+      this.setConnectionState("disconnected");
       if (!this.manualClose) {
         this.scheduleReconnect();
       }
