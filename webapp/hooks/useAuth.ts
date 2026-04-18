@@ -1,10 +1,12 @@
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
+// import * as AuthSession from 'expo-auth-session';
+// import { discovery as googleOidcDiscovery } from 'expo-auth-session/providers/google';
+// import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useSegments } from 'expo-router';
 import {
-  GoogleAuthProvider,
+  // GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithCredential,
+  createUserWithEmailAndPassword,
+  // signInWithCredential,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   type User as FirebaseUser,
@@ -25,7 +27,106 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { auth, db } from '@/lib/firebase';
 import type { User, UserRole } from '@/types';
 
-WebBrowser.maybeCompleteAuthSession();
+// WebBrowser.maybeCompleteAuthSession();
+
+function getFirebaseErrorCode(error: unknown): string | null {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code;
+  }
+  return null;
+}
+
+function formatAuthError(error: unknown): string {
+  const code = getFirebaseErrorCode(error);
+  if (code === 'auth/configuration-not-found') {
+    return (
+      'Firebase Authentication is not enabled for this project. In the Firebase console, open Build → Authentication, ' +
+      'click Get started, then enable the Email/Password and Google sign-in methods.'
+    );
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'This sign-in method is disabled in Firebase. Enable it under Authentication → Sign-in method.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'This app’s domain is not authorized for Firebase Auth. Add it under Authentication → Settings → Authorized domains.';
+  }
+  if (code === 'auth/invalid-email') {
+    return 'That email address is not valid.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'Password is too weak. Use a longer password (Firebase requires at least 6 characters).';
+  }
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+    return 'Incorrect password for this email.';
+  }
+  if (code === 'auth/user-not-found') {
+    return 'No account found for that email.';
+  }
+  if (code === 'permission-denied') {
+    return (
+      'Could not read or write your user profile in Firestore (permission denied). ' +
+      'Check Firestore security rules for `users/{userId}` so signed-in users can read/write their own document.'
+    );
+  }
+  return error instanceof Error ? error.message : 'Sign-in failed';
+}
+
+/** Try password sign-in; if that fails in a way that can mean “no account”, register instead. */
+async function signInOrCreateWithEmail(email: string, password: string): Promise<void> {
+  const trimmed = email.trim();
+  if (!trimmed) {
+    throw new Error('Enter your email.');
+  }
+  if (!password) {
+    throw new Error('Enter a password.');
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, trimmed, password);
+    return;
+  } catch (signInErr) {
+    const c = getFirebaseErrorCode(signInErr);
+    if (
+      c === 'auth/invalid-email' ||
+      c === 'auth/missing-password' ||
+      c === 'auth/user-disabled' ||
+      c === 'auth/too-many-requests' ||
+      c === 'auth/configuration-not-found' ||
+      c === 'auth/operation-not-allowed' ||
+      c === 'auth/unauthorized-domain' ||
+      c === 'auth/network-request-failed' ||
+      c === 'auth/internal-error'
+    ) {
+      throw new Error(formatAuthError(signInErr));
+    }
+
+    try {
+      await createUserWithEmailAndPassword(auth, trimmed, password);
+    } catch (createErr) {
+      const c2 = getFirebaseErrorCode(createErr);
+      if (c2 === 'auth/email-already-in-use') {
+        throw new Error('That email is already registered. Check your password and try again.');
+      }
+      throw new Error(formatAuthError(createErr));
+    }
+  }
+
+  const current = auth.currentUser;
+  if (!current) {
+    throw new Error('Sign-in failed: no active session. Try again.');
+  }
+  try {
+    await ensureUserDocument(current);
+  } catch (profileErr) {
+    await firebaseSignOut(auth);
+    throw new Error(formatAuthError(profileErr));
+  }
+}
 
 const defaultRole: UserRole = 'caregiver';
 
@@ -63,53 +164,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function signInWithGoogleInternal(): Promise<void> {
-  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  if (!webClientId) {
-    throw new Error('Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID');
-  }
-
-  const discovery = await AuthSession.fetchDiscoveryAsync(
-    'https://accounts.google.com/.well-known/openid-configuration',
-  );
-
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'panko',
-    path: 'oauth',
-  });
-
-  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-
-  const request = new AuthSession.AuthRequest({
-    clientId: webClientId,
-    scopes: ['openid', 'profile', 'email'],
-    responseType: AuthSession.ResponseType.IdToken,
-    redirectUri,
-    extraParams: {
-      nonce,
-    },
-  });
-
-  const result = await request.promptAsync(discovery);
-
-  if (result.type !== 'success') {
-    throw new Error(result.type === 'cancel' ? 'Sign-in cancelled' : 'Google sign-in failed');
-  }
-
-  const idToken =
-    typeof result.params.id_token === 'string'
-      ? result.params.id_token
-      : typeof (result.params as { id_token?: string }).id_token === 'string'
-        ? (result.params as { id_token?: string }).id_token
-        : undefined;
-
-  if (!idToken) {
-    throw new Error('Missing Google ID token');
-  }
-
-  const credential = GoogleAuthProvider.credential(idToken);
-  await signInWithCredential(auth, credential);
-}
+// Google sign-in disabled — use email & password. Re-enable by restoring imports above and this function body.
+// async function signInWithGoogleInternal(): Promise<void> {
+//   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+//   ...
+// }
 
 export function AuthProvider({ children }: { children: ReactNode }): ReactElement {
   const [user, setUser] = useState<User | null>(null);
@@ -127,6 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       } catch (error) {
         console.error('Auth state error', error);
         setUser(null);
+        try {
+          await firebaseSignOut(auth);
+        } catch {
+          /* ignore */
+        }
       } finally {
         setLoading(false);
       }
@@ -135,11 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    await signInWithGoogleInternal();
+    throw new Error('Google sign-in is disabled. Use email and password.');
   }, []);
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email.trim(), password);
+    await signInOrCreateWithEmail(email, password);
   }, []);
 
   const signOut = useCallback(async () => {

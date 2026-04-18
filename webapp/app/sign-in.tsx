@@ -12,23 +12,23 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 
 export default function SignInScreen(): ReactElement {
-  const { signInWithGoogle, signInWithEmail } = useAuth();
+  const { signInWithEmail } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onGoogle = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await signInWithGoogle();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sign-in failed');
-    } finally {
-      setBusy(false);
-    }
-  };
+  // const onGoogle = async () => {
+  //   setError(null);
+  //   setBusy(true);
+  //   try {
+  //     await signInWithGoogle();
+  //   } catch (e) {
+  //     setError(e instanceof Error ? e.message : 'Sign-in failed');
+  //   } finally {
+  //     setBusy(false);
+  //   }
+  // };
 
   const onEmail = async () => {
     setError(null);
@@ -46,9 +46,14 @@ export default function SignInScreen(): ReactElement {
     <View style={styles.container}>
       <Text style={styles.title}>Panko</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.button} onPress={onGoogle} disabled={busy}>
+      {/* <Pressable style={styles.button} onPress={onGoogle} disabled={busy}>
         <Text style={styles.buttonLabel}>Continue with Google</Text>
       </Pressable>
+      <Text style={styles.hint}>
+        If Google says the app is not allowed: use the same Google Cloud project as your Web client ID → APIs & Services →
+        OAuth consent screen. Complete required fields; while Publishing status is Testing, add your Gmail under Test users;
+        for Expo web, add your site host under Authorized domains.
+      </Text> */}
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -65,7 +70,7 @@ export default function SignInScreen(): ReactElement {
         onChangeText={setPassword}
       />
       <Pressable style={styles.button} onPress={onEmail} disabled={busy}>
-        <Text style={styles.buttonLabel}>Sign in with email</Text>
+        <Text style={styles.buttonLabel}>Sign in or create account</Text>
       </Pressable>
       {busy ? <ActivityIndicator style={styles.spinner} /> : null}
     </View>
@@ -86,6 +91,11 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#b00020',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 17,
   },
   input: {
     borderWidth: 1,
