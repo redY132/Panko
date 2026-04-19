@@ -10,7 +10,9 @@ export type Patient = {
 export type Medicine = {
   id: string;
   name: string;
-  dosage: string;
+  description: string;
+  dose_description: string;
+  prescribed_by: string;
   scheduleIds: string[];
 };
 

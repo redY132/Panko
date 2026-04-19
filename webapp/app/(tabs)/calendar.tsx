@@ -16,9 +16,9 @@ type MedEntry = {
   id: string;
   time: string;
   name: string;
-  note: string;
-  dose: string;
-  doctor: string;
+  description: string;
+  dose_description: string;
+  prescribed_by: string;
   active: boolean;
 };
 
@@ -27,27 +27,27 @@ const SAMPLE_MEDS: MedEntry[] = [
     id: '1',
     time: '10:00',
     name: 'Oxycodone',
-    note: 'With food',
-    dose: 'Dose 2 of 30',
-    doctor: 'Dr. Sarah Mitchell',
+    description: 'Used to manage moderate to severe chronic pain',
+    dose_description: 'Take 1 tablet orally every 8 hours with or without food',
+    prescribed_by: 'Dr. Sarah Mitchell',
     active: true,
   },
   {
     id: '2',
     time: '13:15',
     name: 'Naloxone',
-    note: 'Before meal',
-    dose: 'Dose 1 of 14',
-    doctor: 'Dr. James Carter',
+    description: 'Reverses opioid overdose effects rapidly',
+    dose_description: 'Administer 1 spray intranasally as needed, may repeat after 2–3 min',
+    prescribed_by: 'Dr. James Carter',
     active: false,
   },
   {
     id: '3',
     time: '18:00',
     name: 'Ibuprofen',
-    note: 'After food',
-    dose: 'Dose 3 of 20',
-    doctor: 'Dr. Sarah Mitchell',
+    description: 'Reduces inflammation, fever, and mild to moderate pain',
+    dose_description: 'Take 1 tablet (400 mg) orally every 6–8 hours after food',
+    prescribed_by: 'Dr. Sarah Mitchell',
     active: false,
   },
 ];
@@ -146,7 +146,9 @@ export default function CalendarScreen() {
                 </Pressable>
               </View>
 
-              <Text style={[styles.cardNote, med.active && styles.whiteFaded]}>{med.note}</Text>
+              <Text style={[styles.cardDescription, med.active && styles.whiteFaded]}>
+                {med.description}
+              </Text>
 
               <View style={styles.metaRow}>
                 <MaterialCommunityIcons
@@ -154,7 +156,9 @@ export default function CalendarScreen() {
                   size={14}
                   color={med.active ? 'rgba(255,255,255,0.75)' : '#9CA3AF'}
                 />
-                <Text style={[styles.metaText, med.active && styles.whiteFaded]}>{med.dose}</Text>
+                <Text style={[styles.metaText, med.active && styles.whiteFaded]}>
+                  {med.dose_description}
+                </Text>
               </View>
 
               <View style={styles.metaRow}>
@@ -164,7 +168,7 @@ export default function CalendarScreen() {
                   color={med.active ? 'rgba(255,255,255,0.75)' : '#9CA3AF'}
                 />
                 <Text style={[styles.metaText, med.active && styles.whiteFaded]}>
-                  {med.doctor}
+                  {med.prescribed_by}
                 </Text>
               </View>
             </View>
@@ -270,7 +274,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardName: { fontSize: 16, fontWeight: '700', color: '#111', flex: 1 },
-  cardNote: { fontSize: 13, color: '#6B7280' },
+  cardDescription: { fontSize: 13, color: '#6B7280' },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 13, color: '#6B7280' },
