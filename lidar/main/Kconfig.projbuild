@@ -8,9 +8,15 @@ menu "LiDAR Mapping Config"
         string "WiFi Password"
         default "mypassword"
 
+    config DEVICE_ID
+        string "ESP32 Device ID"
+        default "panko-lidar-01"
+        help
+            Unique identifier stamped on every LIDAR_SCAN WebSocket message.
+
     config WS_URI
         string "Mini PC WebSocket URI"
-        default "ws://192.168.1.100:8765"
+        default "ws://172.20.10.7:8765"
         help
             WebSocket URI of the Mini PC server, e.g. ws://192.168.1.100:8765
 
